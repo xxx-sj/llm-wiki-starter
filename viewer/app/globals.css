@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* careerhackeralex.vercel.app/memory 다크 토큰 미러 */
+:root {
+  color-scheme: dark;
+
+  /* Foreground scale */
+  --fg: #fafafa;
+  --fg-1: #ffffff;
+  --fg-2: #cccccc;  /* ON / primary */
+  --fg-3: #a1a1a1;
+  --fg-4: #888888;
+  --fg-5: #777777;  /* OFF / disabled */
+  --fg-6: #737373;
+  --fg-7: #888888;
+  --fg-8: #a1a1a1;
+  --fg-9: #d4d4d4;
+
+  /* Backgrounds & surfaces */
+  --bg: #0a0a0a;
+  --surface-1: #111111;
+  --surface-2: #141414;
+  --surface-3: #1a1a1a;
+  --surface-4: #222222;
+
+  /* Borders */
+  --border-1: #1e1e1e;
+  --border-2: #2a2a2a;
+  --border-3: #333333;
+
+  /* Accent (red — used for 주장 thesis nodes/dots, 반박 edges) */
+  --accent: #b00d26;
+  --accent-soft: #ff4d64;
+  --accent-hover: #8e0a1e;
+  --accent-bg: rgba(176, 13, 38, 0.10);
+  --accent-border: rgba(176, 13, 38, 0.25);
+
+  /* Font sizes (reference) */
+  --fs-micro: 11px;
+  --fs-caption: 12px;
+  --fs-body-xs: 13px;
+  --fs-body-s: 14px;
+  --fs-body-m: 15px;
+  --fs-body-l: 17px;
+  --fs-display: 40px;
+
+  /* Letter spacing */
+  --ls-body: -0.011em;
+  --ls-snug: -0.01em;
+  --ls-tight-l: -0.03em;
+  --ls-tight-xl: -0.04em;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "SF Pro Display", "Apple SD Gothic Neo", "Noto Sans KR", "Helvetica Neue",
+    Helvetica, Arial, sans-serif;
+}
+
+html, body, #__next { height: 100%; margin: 0; }
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--fg-2);
+  letter-spacing: var(--ls-body);
+  font-feature-settings: "ss01", "ss02", "cv11";
+}
+
+h1, h2, h3 {
+  letter-spacing: var(--ls-tight-l);
+}
+
+/* prose 다크 테마 오버라이드 */
+.prose {
+  color: var(--fg-2);
+}
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  color: var(--fg-1);
+  letter-spacing: var(--ls-tight-l);
+}
+.prose a {
+  color: var(--fg-9);
+  text-decoration: underline;
+  text-decoration-color: var(--border-3);
+}
+.prose a:hover {
+  text-decoration-color: var(--fg-4);
+}
+.prose code {
+  background-color: var(--surface-3);
+  color: var(--fg-1);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+.prose pre {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-1);
+}
+.prose strong {
+  color: var(--fg-1);
+}
+.prose hr {
+  border-color: var(--border-2);
+}
+.prose blockquote {
+  border-left-color: var(--border-3);
+  color: var(--fg-3);
+}
+.prose ul, .prose ol {
+  color: var(--fg-2);
+}

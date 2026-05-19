@@ -218,6 +218,137 @@ Cloudflare/Vercel webhook → 자동 재빌드 → 1~2분 후 배포.
 
 ---
 
+## AI 챗봇 추가하기 (선택)
+
+[careerhackeralex/memory](https://careerhackeralex.vercel.app/memory)처럼 wiki 위에 RAG 챗봇을 얹어 "내가 쌓은 지식 기반으로 질문에 답"하게 만드는 패턴. starter는 기본적으로 챗봇 미포함이지만, 아래 가이드로 직접 추가할 수 있다.
+
+### 기본 흐름 (RAG)
+
+```
+사용자 질문
+   ↓
+질문 → 임베딩 (e.g. OpenAI text-embedding-3-small)
+   ↓
+임베딩 → 코사인 유사도 → top-K 노드
+   ↓
+top-K 본문 + 질문 → LLM (Claude/GPT) → 답변
+   ↓
+답변 + 인용된 노드 ID → UI 표시
+```
+
+### 패턴 3가지 — 비용/보안/단순함 트레이드오프
+
+| 패턴 | 누가 LLM 비용 부담 | API key 위치 | 호스팅 영향 | 추천 시점 |
+|---|---|---|---|---|
+| **A. BYOK** (브라우저) | 사용자 각자 | 사용자 `localStorage` | ✅ 정적 그대로 | 본인 + 가까운 1~5명만 |
+| **B. Cloudflare Functions** | repo 주인 | Cloudflare 환경변수 | ⚠️ Pages Functions 추가 | 회사 동료 5~20명 |
+| **C. 별도 백엔드** | repo 주인 | 외부 서버 환경변수 | ❌ 동적 백엔드 필요 | SaaS, 익명 일반 사용자 |
+
+### 패턴 A — BYOK (가장 빠른 시작, 정적 호스팅 유지)
+
+**빌드 타임 (`scripts/build.ts` 확장)**:
+1. 환경변수 `OPENAI_API_KEY` 있을 때만 임베딩 생성
+2. 모든 노드 본문 → OpenAI `text-embedding-3-small` API
+3. `public/embeddings.json` 출력: `{ "<node_id>": [0.123, -0.456, ...] }`
+4. CI(빌드)에서 키 없으면 임베딩 스킵, keyword search만 작동
+
+**런타임 (브라우저, 새 `<ChatPanel>` 컴포넌트)**:
+1. 사용자가 첫 사용 시 본인 API key 입력 → `localStorage.setItem('llm_api_key', ...)`
+2. 질문 → fetch로 OpenAI Embeddings API 호출 (브라우저 → OpenAI 직접, CORS OK)
+3. `embeddings.json`과 코사인 유사도 → top-5 노드
+4. top-5 본문 + 질문 → Anthropic/OpenAI Chat Completions (SSE streaming)
+5. 답변 markdown 렌더, 인용된 노드 ID는 자동 링크화
+
+**필요한 라이브러리**:
+- `@anthropic-ai/sdk` 또는 `openai` (브라우저 모드)
+- 또는 fetch 직접 (둘 다 CORS 허용)
+
+**비용 (BYOK 사용자 입장)**:
+- 빌드 시 임베딩: 100 노드 / 50k tokens = $0.001
+- 질문 1회: 임베딩 + LLM = ~$0.01 (10원)
+
+**보안 주의**:
+- localStorage에 평문 API key 저장 — XSS 발생 시 유출 위험
+- CSP (Content Security Policy) 헤더 설정 권장
+- 본인/팀 신뢰 환경에서만 권장
+
+### 패턴 B — Cloudflare Pages Functions (회사용 권장)
+
+**빌드는 패턴 A와 동일** (embeddings.json 생성).
+
+**런타임 (Cloudflare Pages Functions 추가)**:
+1. `functions/api/chat.ts` 생성 — Cloudflare Pages는 이 경로를 자동으로 Edge function으로 노출
+2. 사용자 질문 → POST `/api/chat`
+3. Function이 환경변수의 API key로 OpenAI/Anthropic 호출
+4. SSE로 답변 스트리밍
+
+```typescript
+// functions/api/chat.ts (개념적 예시)
+export async function onRequestPost(context: any) {
+  const { question, topK } = await context.request.json();
+  const apiKey = context.env.ANTHROPIC_API_KEY;
+  
+  // 1. 질문 임베딩 (OpenAI)
+  // 2. embeddings.json fetch + 코사인 유사도
+  // 3. top-K 노드 본문 + question → Anthropic streaming
+  // 4. SSE 응답
+  
+  return new Response(stream, {
+    headers: { 'content-type': 'text/event-stream' }
+  });
+}
+```
+
+**Cloudflare 무료 한도**:
+- Pages Functions: **100,000 requests/day** (무료)
+- Vectorize (선택, 벡터 DB로): **5M vectors 무료**
+- Workers AI (선택, 자체 LLM): 일부 모델 무료 — 단 한국어 약함
+
+**설정**:
+- Cloudflare Pages 대시보드 → Settings → Environment Variables → `ANTHROPIC_API_KEY` 또는 `OPENAI_API_KEY` 추가
+- Production + Preview 환경 모두 설정
+
+**장점**:
+- 사용자에게 API key 요구 안 함
+- 모든 사용자(동료, 외부)가 즉시 사용 가능
+- repo 주인이 사용량 통제 (rate limit, 인증 추가 가능)
+
+**비용 (repo 주인 입장)**:
+- 100 노드, 동료 10명 × 일 10질문 = 월 3,000 질문 = ~$30/월 (Claude Haiku 기준)
+- 더 저렴하게: Claude Haiku 대신 GPT-4o-mini = ~$5/월
+
+### 패턴 C — 별도 백엔드 (SaaS급 운영)
+
+별도 서비스(Vercel Functions, Railway, Fly.io 등)로 백엔드 분리. 인증, rate limit, 사용자별 history, 사용량 분석 등 본격 운영용. starter 범위 밖.
+
+### Phase별 구현 권장
+
+starter 받은 사람이 점진적으로 추가:
+
+**Phase 1 (1~2일, API key 0)** — keyword search
+- `scripts/build.ts`에 MiniSearch/Lunr 인덱스 빌드 추가
+- `public/search-index.json` 출력
+- 상단에 검색창 + 결과 노드 리스트 + 그래프 강조
+- 이것만 해도 "검색 용이"는 충족
+
+**Phase 2 (3~5일, BYOK 필요)** — semantic + RAG
+- 패턴 A 또는 B로 embeddings + LLM 추가
+- 채팅 UI 컴포넌트
+- 답변 스트리밍
+
+**Phase 3 (2~3일, 다듬기)** — UX 완성
+- 대화 히스토리 (localStorage)
+- 답변 인용 노드 → 그래프 강조
+- 모바일 친화 레이아웃
+
+### 추가 참고
+
+- 검색 우선이면 [MiniSearch](https://github.com/lucaong/minisearch) 추천 (한글 token 분리 옵션)
+- 임베딩 비용 최소화: 본문 너무 길면 chunking (~512 token)
+- 한국어 임베딩 품질: OpenAI > Cohere multilingual > Cloudflare BGE-M3
+
+---
+
 ## 협업
 
 개발팀이라면 git/PR 흐름 그대로:

@@ -243,7 +243,7 @@ SSE 응답 (cited nodes meta + raw OpenAI stream)
 | 파일 | 역할 |
 |---|---|
 | `viewer/scripts/build-embeddings.ts` | 빌드 시 노드 본문 → OpenAI 임베딩 → `public/embeddings.json` |
-| `viewer/functions/api/chat.ts` | Cloudflare Pages Function — RAG 파이프라인 + SSE 응답 |
+| `functions/api/chat.ts` | Cloudflare Pages Function — RAG 파이프라인 + SSE 응답 |
 | `viewer/package.json` `prebuild` | `build.ts && build-embeddings.ts` 체이닝 |
 
 **Chat UI 컴포넌트는 starter에 아직 포함 안 됨** — `/api/chat`을 호출하는 React 컴포넌트는 직접 작성. 또는 curl로 동작 검증 후 UI 작업.
@@ -328,7 +328,7 @@ data: [DONE]
 
 ### 다른 모델로 바꾸기
 
-`viewer/functions/api/chat.ts` 상단 상수:
+`functions/api/chat.ts` 상단 상수:
 - `EMBED_MODEL = 'text-embedding-3-small'` → `'text-embedding-3-large'` (3072 dim, 더 정확하지만 비용 ↑)
 - `CHAT_MODEL = 'gpt-4o-mini'` → `'gpt-4o'` (답변 품질 ↑, 10배 비쌈) 또는 `'gpt-4-turbo'` 등
 

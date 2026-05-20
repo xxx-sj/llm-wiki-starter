@@ -266,13 +266,39 @@ SSE 응답 (cited nodes meta + raw OpenAI stream)
 두 변수 설정 후 **Redeploy** (수동 트리거 또는 빈 commit push).
 
 #### 3. 빌드 로그 확인
+
+첫 빌드:
 ```
 [build-graph] wrote .../graph.json (personal only)
-[build-embeddings] embedding N nodes via text-embedding-3-small...
-[build-embeddings] wrote .../embeddings.json (N nodes, 1536 dim, ~XX KB)
+[build-embeddings] 0 reused, 5 to embed via text-embedding-3-small...
+[build-embeddings] 5/5
+[build-embeddings] wrote .../embeddings.json (5 nodes, 1536 dim, ~143KB) — 0 reused, 5 new
+```
+
+본문 변경 없는 다음 빌드 (incremental cache 적중):
+```
+[build-graph] wrote .../graph.json (personal only)
+[build-embeddings] all 5 nodes cached — no OpenAI calls
+[build-embeddings] wrote .../embeddings.json (5 nodes, 1536 dim, ~143KB) — 5 reused, 0 new
 ```
 
 `OPENAI_API_KEY`가 없으면 임베딩 단계는 자동 skip (graph.json만 생성 → /api/chat은 `embeddings_missing` 에러).
+
+#### 💡 비용 절감 — `embeddings.json` git commit 권장
+
+`viewer/public/embeddings.json`은 **빌드 산출물이자 다음 빌드의 캐시**. SHA-256 hash로 노드 (title + body) 변경 감지 → **변경된 노드만 OpenAI 호출**.
+
+`viewer/.gitignore`에서 `public/embeddings.json` 줄이 주석 처리돼 있어요. 그래서 git에 commit 가능. 처음 빌드 후:
+
+```bash
+git add viewer/public/embeddings.json
+git commit -m "cache: initial embeddings"
+git push
+```
+
+이러면 Cloudflare 빌드에서도 이전 캐시를 시작점으로 사용해 **본문이 안 바뀐 노드는 API 호출 0**. 노드 1만 개 중 1개 수정한 push → OpenAI 호출 1번.
+
+**모델 변경 시 자동 무효화** — `EMBED_MODEL`을 `text-embedding-3-large` 등으로 바꾸면 전체 재계산.
 
 #### 4. API 동작 테스트
 ```bash

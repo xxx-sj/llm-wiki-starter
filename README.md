@@ -339,6 +339,39 @@ const hash = sha256(text);   // 64자 hex
 
 **5) 모델 변경** (`text-embedding-3-small` → `-large`) → cache의 `model` 비교로 무효화, 전체 재계산
 
+##### 캐시를 외부 storage로 옮길 시점 (YAGNI 원칙)
+
+**지금은 git에 그대로 두는 게 정답**. 아래 트리거 중 **하나라도** 닿으면 그때 옮기는 걸로:
+
+| 트리거 | 한계치 | 의미 |
+|---|---|---|
+| `embeddings.json` 크기 | > **50~100MB** | git diff/push 부담 |
+| 노드 수 | > **5,000** | 위와 거의 동시 도달 |
+| `git clone` 시간 | > **10초** | 개발 흐름 느려짐 |
+| GitHub 단일 파일 한계 | **100MB hard limit** | 더는 commit 불가 |
+| 매 push 시 LFS/cache 진단 시간이 부담 | 주관 | — |
+
+**예상**: text-embedding-3-small은 노드당 ~28KB (1536 dim × float). 즉 **약 3,500 노드 ≈ 100MB**. 그 시점에 마이그레이션 검토.
+
+##### 옮길 때 옵션 비교
+
+| 옵션 | 무료 한도 | 작업량 | 추천 시점 |
+|---|---|---|---|
+| **GitHub LFS** | 1GB/월 | `git lfs track 'viewer/public/embeddings.json'` — **코드 변경 0** | 단일 파일만 큰 경우 (가장 가벼움) |
+| **Cloudflare KV** | 1GB storage, 100k reads/일 | build/runtime fetch를 `env.EMBEDDINGS_KV.get(...)`로 — 20줄 | 작고 자주 접근 |
+| **Cloudflare R2** | 10GB storage, 1M reads/월 | S3-호환 fetch — 30줄 + bucket 셋업 | 큰 파일 + 사용량 증가 |
+
+마이그레이션 자체는 **반나절 작업** (현 코드의 fetch 위치만 교체, 데이터 구조는 동일).
+
+##### 미리 옮기지 마세요 — 이유
+
+- **YAGNI**: 현재 git이 잘 작동. 미리 옮기면 외부 환경변수/권한/백업 정책 추가 운영 부담
+- **V2 architecture 진화 가능성**: 노드 수천 도달 시점에 DB/SaaS로 갈 가능성 ↑ → 지금 결정한 외부 storage가 그때 맞지 않을 수도
+- **마이그레이션 비용 작음**: 데이터 구조 변경 없이 fetch 소스만 교체 → 반나절
+- **현재 페인 포인트 0**: clone 1초, 빌드 30초
+
+→ **트리거 닿을 때 옮긴다**가 정답. 미리 만들지 않기.
+
 #### 4. API 동작 테스트
 ```bash
 curl -N -X POST https://<your-cf-url>/api/chat \

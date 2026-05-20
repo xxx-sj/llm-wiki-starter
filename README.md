@@ -298,7 +298,46 @@ git push
 
 이러면 Cloudflare 빌드에서도 이전 캐시를 시작점으로 사용해 **본문이 안 바뀐 노드는 API 호출 0**. 노드 1만 개 중 1개 수정한 push → OpenAI 호출 1번.
 
-**모델 변경 시 자동 무효화** — `EMBED_MODEL`을 `text-embedding-3-large` 등으로 바꾸면 전체 재계산.
+##### Hash 동작 — 무엇이 변경 감지되나
+
+`viewer/scripts/build-embeddings.ts`에서 각 노드의 hash 입력:
+
+```ts
+const text = `${node.title}\n\n${htmlToText(body)}`.slice(0, 8000);
+const hash = sha256(text);   // 64자 hex
+```
+
+| 변경 | hash 변경? | 재계산? |
+|---|---|---|
+| 본문 markdown 한 글자 수정 | ✅ | ✅ OpenAI 호출 |
+| frontmatter `title` 변경 | ✅ | ✅ |
+| `node_type`, `memory_type` 변경 | ❌ | ❌ 재사용 |
+| `links:` 엣지 추가/제거 | ❌ | ❌ |
+| `tags`, `sources`, `confidence` 변경 | ❌ | ❌ |
+| `last_reviewed`, `created` 변경 | ❌ | ❌ |
+| 파일명/id 변경 | 새 id로 인식 → 신규 임베딩 | ✅ 신규 |
+| 노드 파일 삭제 | graph에서 사라짐 → cache 자동 제외 | — |
+| `EMBED_MODEL` 상수 변경 | cache `model` 필드 비교로 전체 무효화 | ✅ 전체 |
+
+→ **본문/제목 바뀌면 정확히 그 노드만**, 메타 데이터 정리(`/wiki-lint` 등)는 비용 0.
+
+##### 시나리오 예시
+
+**1) 본문 오타 수정** → 그 노드 1개만 OpenAI 호출
+```
+[build-embeddings] 4 reused, 1 to embed via text-embedding-3-small...
+```
+
+**2) `last_reviewed` 날짜만 갱신** → 호출 0
+```
+[build-embeddings] all 5 nodes cached — no OpenAI calls
+```
+
+**3) 새 엣지(`links:`) 추가** → 호출 0 (graph.json에만 반영, embedding은 그대로)
+
+**4) 새 노드 추가** → 신규 1개만 호출
+
+**5) 모델 변경** (`text-embedding-3-small` → `-large`) → cache의 `model` 비교로 무효화, 전체 재계산
 
 #### 4. API 동작 테스트
 ```bash
